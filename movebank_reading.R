@@ -8,6 +8,36 @@ library(rgdal)
 library(geosphere)
 
 
+# points to line function rpubs.com/walerke/points_to_line ----------------
+
+tracks <- points_spdf@data
+
+makeLines <-
+  function(tracks)
+  {
+    
+    # Make into a spatial lines object
+    
+    spLines <-
+      Line(coordinates(tracks)) %>%
+      list %>%
+      Lines(ID = 'x') %>%
+      list %>%
+      SpatialLines(
+        proj4string = CRS(
+          proj4string(point_clusters_sp)
+        )
+      )
+    
+    # Return spatial lines dataframe:
+      
+      SpatialLinesDataFrame(
+        spLines,
+        data = data.frame(z = 1),
+        match.ID = FALSE
+      )
+  }
+
 # read data ---------------------------------------------------------------
 
 mData <-
@@ -81,21 +111,62 @@ points_sp$clust <- cutree(hc, h = d)
 point_clusters <-
   points_sp@data %>%
   group_by(clust) %>%
-  sample_n(1)
+  sample_n(1) %>%
+  ungroup
+
+# Make spatial:
+
+point_clusters_sp <-
+  SpatialPointsDataFrame(
+    point_clusters[,3:4], 
+    data = point_clusters, 
+    proj4string = CRS("+proj=longlat +datum=WGS84")
+  )
 
 # points to kml -----------------------------------------------------------
 
-outName <- 'test5.kml'
+# Provide information for point tooltip:
 
-SpatialPointsDataFrame(
-  point_clusters[,3:4], 
-  data = point_clusters, 
-  proj4string = CRS("+proj=longlat +datum=WGS84")
-) %>%
-  writeOGR(
-    dsn=outName,
-    layer = "data",
-    driver="KML"
+descriptionOutput <-
+  point_clusters %>%
+  ungroup %>%
+  transmute(
+    dOut = paste(
+      '<p><b>date:</b> ', as.Date(dt),'<br>',
+      '<b>long:</b> ', long, '<br>',
+      '<b>lat:</b> ', lat,
+      '</p>')
+  ) %>%
+  .$dOut
+  
+# KML output of points
+
+kmlPoints(
+  point_clusters_sp,
+  kmlfile = 'test_point.kml',
+  icon = 'http://maps.google.com/mapfiles/kml/shapes/placemark_circle_highlight.png',
+  name = '',
+  description = descriptionOutput)
+
+ 
+# plotKML::kml(
+#   point_clusters_sp, 
+#   file = 'test.kml', 
+#   shape = 'http://maps.google.com/mapfiles/kml/shapes/placemark_circle_highlight.png', 
+#   alpha = 1, 
+#   size = 1, 
+#   color = "#ffffff")
+
+# lines -------------------------------------------------------------------
+
+makeLines(point_clusters_sp) %>%
+  kmlLines(
+    kmlfile = 'test_line.kml',
+    col = '#ffff00',
+    lwd = 2
   )
+
+
+
 
 
